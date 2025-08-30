@@ -18,3 +18,17 @@ export async function unesi(request: KlijentRequest) {
   );
   return res.data;
 }
+
+export async function pretrazi(oib: string | undefined) {
+  const res = await axios.get<KlijentResponse>(
+    API_BASE_URL + `/api/klijenti/${oib}`,
+  );
+  return res.data;
+}
+
+export async function obrisi(oib: string | undefined) {
+  const res = await axios.delete<KlijentResponse>(
+    API_BASE_URL + `/api/klijenti/${oib}`,
+  );
+  return res.data;
+}
