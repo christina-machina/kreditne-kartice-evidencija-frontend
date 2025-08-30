@@ -1,20 +1,18 @@
 import { InputText } from 'primereact/inputtext';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FloatLabel } from 'primereact/floatlabel';
 import { Button } from 'primereact/button';
 import { dohvatiStatuse, unesi } from '../KlijentiService';
 import StatusKarticeResponse from '../response/StatusKarticeResponse';
 import { DropdownStatus } from '../common/DropdownStatus';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, FieldValues, useForm, UseFormSetError } from 'react-hook-form';
 import * as Yup from 'yup';
 import { InferType } from 'yup';
 import KlijentRequest from '../request/KlijentRequest';
 import { AxiosError } from 'axios';
 import OsnovniResponse from '../response/OsnovniResponse';
-import KlijentResponse from '../response/KlijentResponse';
-import { Toast } from 'primereact/toast';
 import TipPoruke from '../model/TipPoruke';
-
+import Poruka from '../model/Poruka';
 
 const schema = Yup.object().shape({
   ime: Yup.string().nullable(),
@@ -24,19 +22,24 @@ const schema = Yup.object().shape({
 });
 export type FormType = InferType<typeof schema>;
 
-const Unos = () => {
+interface UnosProps {
+  setVisible: (value: boolean) => void,
+  prikaziPoruke: <TFieldValues extends FieldValues>(
+    poruke: Poruka[],
+    setError: UseFormSetError<TFieldValues>,
+  ) => void;
+}
+
+const Unos = ({ setVisible, prikaziPoruke }: UnosProps) => {
   const [statusi, setStatusi] = useState<StatusKarticeResponse>();
-  const [response, setResponse] = useState<KlijentResponse>();
 
   const {
-    reset,
     control,
     handleSubmit,
     register,
     setError,
     formState: { errors },
   } = useForm<FormType>();
-  const toast = useRef<Toast>(null);
 
   useEffect(() => {
     dohvatiStatuse().then(setStatusi);
@@ -52,85 +55,64 @@ const Unos = () => {
 
     try {
       const res = await unesi(request);
-      setResponse(res);
-      res?.poruke.forEach((poruka) => {
-        if (poruka.tip === TipPoruke.USPJEH) {
-          toast.current?.show({
-            severity: 'success',
-            detail: poruka.opis,
-            life: 3000,
-          });
-          reset();
-        }
-      });
-
-      res?.poruke?.forEach((poruka) => {
-        if (poruka.tip === TipPoruke.GRESKA && poruka.sifra) {
-          console.log(poruka);
-          setError(poruka.sifra as keyof FormType, {
-            type: 'server',
-            message: poruka.opis,
-          });
-        }
-      });
+      prikaziPoruke<FormType>(res?.poruke, setError);
+      if (res.poruke?.some(p => p.tip === TipPoruke.GRESKA)) {
+        return;
+      }
+      setVisible(false);
     } catch (e) {
       const error = e as AxiosError<OsnovniResponse>;
       console.log(error);
     }
   };
 
-  const onFormError = (error: any) => {
-    console.log(error);
-  };
-
   return (
-    <>
-      <Toast ref={toast} />
-      <form onSubmit={handleSubmit(onSubmit)} onError={onFormError}>
-        <div className="flex flex-column align-items-center card gap-2">
-          <div className={'flex flex-column gap-1'}>
-            <FloatLabel>
-              <InputText id="ime" {...register('ime')} />
-              <label htmlFor="ime">Ime</label>
-            </FloatLabel>
-            {errors.ime && <small className="p-error">{errors.ime.message}</small>}
-          </div>
-          <div className={'flex flex-column gap-1'}>
-            <FloatLabel>
-              <InputText id="prezime" {...register('prezime')} />
-              <label htmlFor="preziime">Prezime</label>
-            </FloatLabel>
-            {errors.prezime && <small className="p-error">{errors.prezime.message}</small>}
-          </div>
-          <div className={'flex flex-column gap-1'}>
-            <FloatLabel>
-              <InputText id="oib" {...register('oib')} />
-              <label htmlFor="oib">OIB</label>
-            </FloatLabel>
-            {errors.oib && <small className="p-error">{errors.oib.message}</small>}
-          </div>
-          <div className={'flex flex-column gap-1 w-15rem'}>
-            <Controller
-              name="statusKarticeSifra"
-              control={control}
-              render={({ field }) => (
-                <DropdownStatus
-                  value={statusi?.statusi.find(s => s.sifra === field.value) || null}
-                  onChange={(v) => field.onChange(v?.sifra)}
-                  statusi={statusi?.statusi}
-                />
-              )}
+    <form onSubmit={handleSubmit(onSubmit)}
+          className="flex flex-column card gap-3 p-3 align-items-center">
+      <h3 className="text-center">Unos novog klijenta</h3>
+
+      <div className="flex flex-column gap-1">
+        <FloatLabel>
+          <InputText id="ime" {...register('ime')}  />
+          <label htmlFor="ime">Ime</label>
+        </FloatLabel>
+        {errors.ime && <small className="p-error">{errors.ime.message}</small>}
+      </div>
+
+      <div className="flex flex-column gap-1">
+        <FloatLabel>
+          <InputText id="prezime" {...register('prezime')}/>
+          <label htmlFor="prezime">Prezime</label>
+        </FloatLabel>
+        {errors.prezime && <small className="p-error">{errors.prezime.message}</small>}
+      </div>
+
+      <div className="flex flex-column gap-1">
+        <FloatLabel>
+          <InputText id="oib" {...register('oib')} />
+          <label htmlFor="oib">OIB</label>
+        </FloatLabel>
+        {errors.oib && <small className="p-error">{errors.oib.message}</small>}
+      </div>
+
+      <div className="flex flex-column gap-1 w-16rem">
+        <Controller
+          name="statusKarticeSifra"
+          control={control}
+          render={({ field }) => (
+            <DropdownStatus
+              value={statusi?.statusi.find(s => s.sifra === field.value) || null}
+              onChange={(v) => field.onChange(v?.sifra)}
+              statusi={statusi?.statusi}
             />
-            {errors.statusKarticeSifra &&
-              <small className="p-error">{errors.statusKarticeSifra.message}</small>}
-          </div>
-          <div className={'flex flex-column gap-1'}>
-            <Button label="Unesi" type={'submit'}
-            />
-          </div>
-        </div>
-      </form>
-    </>
+          )}
+        />
+        {errors.statusKarticeSifra &&
+          <small className="p-error">{errors.statusKarticeSifra.message}</small>}
+      </div>
+
+      <Button label="Unesi" type="submit" className="mt-2" />
+    </form>
   );
 };
 
